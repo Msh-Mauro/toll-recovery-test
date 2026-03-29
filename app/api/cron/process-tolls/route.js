@@ -1,11 +1,10 @@
 // Daily batch processor — runs at 11:30 PM via Vercel Cron or manual call
-// Fetches GPS points for all unprocessed trips → sends to TollGuru → stores results
+// Uses encoded_polyline from Zubie trip → synchronous TollGuru call → stores results
 //
 // Protect with: Authorization: Bearer <CRON_SECRET>
 
 import { getUnprocessedTrips, markTripProcessed } from '../../../../lib/db.js';
-import { getTripPoints } from '../../../../lib/zubie.js';
-import { submitGpsTrace, pollResults, extractTollSummary } from '../../../../lib/tollguru.js';
+import { submitPolyline, extractTollSummary } from '../../../../lib/tollguru.js';
 
 export async function POST(request) {
   // Auth check
@@ -25,29 +24,21 @@ export async function POST(request) {
 
   for (const trip of trips) {
     try {
-      // Fetch GPS points from Zubie
-      const points = await getTripPoints(trip.trip_key);
-
-      if (points.length < 2) {
-        console.log(`[cron] Skipping ${trip.trip_key} — not enough GPS points (${points.length})`);
-        markTripProcessed(trip.trip_key, { skipped: true, reason: 'insufficient_points', count: points.length });
-        results.push({ trip_key: trip.trip_key, status: 'skipped', reason: 'insufficient_points' });
+      if (!trip.encoded_polyline) {
+        console.log(`[cron] Skipping ${trip.trip_key} — no polyline`);
+        await markTripProcessed(trip.trip_key, { skipped: true, reason: 'no_polyline' });
+        results.push({ trip_key: trip.trip_key, status: 'skipped', reason: 'no_polyline' });
         continue;
       }
 
-      // Submit to TollGuru
-      const requestId = await submitGpsTrace(points);
-      console.log(`[cron] TollGuru requestId: ${requestId} for trip ${trip.trip_key}`);
-
-      // Poll for result
-      const tollResult = await pollResults(requestId);
+      // Send polyline to TollGuru — synchronous, no polling needed
+      const tollResult = await submitPolyline(trip.encoded_polyline);
       const summary = extractTollSummary(tollResult);
 
-      // Save
-      markTripProcessed(trip.trip_key, summary);
+      await markTripProcessed(trip.trip_key, summary);
       results.push({ trip_key: trip.trip_key, status: 'done', ...summary });
 
-      console.log(`[cron] Trip ${trip.trip_key}: $${summary.total_usd} in tolls (${summary.count} plazas)`);
+      console.log(`[cron] Trip ${trip.trip_key}: $${summary.total_usd} (${summary.count} tolls)`);
 
     } catch (err) {
       console.error(`[cron] Failed trip ${trip.trip_key}:`, err.message);

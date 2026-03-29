@@ -50,6 +50,7 @@ export async function GET(request) {
         started_at: trip.start_point?.timestamp || null,
         ended_at: trip.end_point?.timestamp || null,
         gps_distance: trip.gps_distance || null,
+        encoded_polyline: trip.encoded_polyline || null,
       });
       imported++;
     }
