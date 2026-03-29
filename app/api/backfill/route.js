@@ -10,6 +10,7 @@ export async function GET(request) {
 
   let started_after = searchParams.get('started_after');
   let started_before = searchParams.get('started_before');
+  const vehicle_key = searchParams.get('vehicle_key');
 
   // Default: last N days
   if (!started_after) {
@@ -26,6 +27,7 @@ export async function GET(request) {
   do {
     const params = new URLSearchParams({ size: '50', started_after });
     if (started_before) params.set('started_before', started_before);
+    if (vehicle_key) params.set('vehicle_key', vehicle_key);
     if (cursor) params.set('cursor', cursor);
 
     const res = await fetch(`https://api.zubiecar.com/api/v2/zinc/trips?${params}`, {
