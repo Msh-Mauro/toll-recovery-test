@@ -102,7 +102,10 @@ export default function Dashboard() {
   return (
     <div style={styles.page}>
       <div style={styles.header}>
-        <p style={styles.title}>🚗 MSH Rentals — Toll Dashboard</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <p style={styles.title}>🚗 MSH Rentals — Toll Dashboard</p>
+          <a href='/report' style={{ background: '#2e7d32', borderRadius: 8, color: '#fff', padding: '8px 16px', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>📄 Generate Report</a>
+        </div>
         <p style={styles.sub}>GPS-inferred toll tracking via TollGuru · Last processed: {trips.length > 0 ? fmt(trips[0]?.processed_at) : '—'}</p>
       </div>
 
