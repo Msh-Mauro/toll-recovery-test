@@ -14,7 +14,11 @@ export async function POST(request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const trips = getUnprocessedTrips();
+  const { searchParams } = new URL(request.url);
+  const limit = parseInt(searchParams.get('limit') || '0');
+
+  let trips = await getUnprocessedTrips();
+  if (limit > 0) trips = trips.slice(0, limit);
   console.log(`[cron] Processing ${trips.length} unprocessed trips`);
 
   const results = [];
