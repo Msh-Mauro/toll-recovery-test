@@ -34,7 +34,7 @@ export async function GET(request) {
   }
 
   const tokens = await res.json();
-  saveTokens(tokens);
+  await saveTokens(tokens);
 
   return Response.json({
     success: true,
