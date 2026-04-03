@@ -31,14 +31,15 @@ export async function POST(request) {
 
   // ── vehicle_location_update ─────────────────────────────────────────────────
   // Real-time location ping during a trip — store for crossing time interpolation
+  // Payload: body.car has the vehicle data, body.timestamp is the event time
   if (event === 'vehicle_location_update') {
-    const loc = body.location || body.vehicle_location || body;
-    const vehicle_key = vehicle?.key || body.vehicle_key || null;
-    const timestamp = loc.timestamp || loc.time || body.timestamp || null;
-    const lat = loc.lat ?? loc.latitude ?? null;
-    const lng = loc.lng ?? loc.longitude ?? null;
-    const speed_mph = loc.speed_mph ?? loc.speed ?? null;
-    const heading = loc.heading ?? null;
+    const car = body.car || {};
+    const vehicle_key = car.key || null;
+    const timestamp = body.timestamp || null;          // ISO 8601 with TZ offset
+    const lat = car.latitude ?? null;
+    const lng = car.longitude ?? null;
+    const speed_mph = car.speed ?? null;               // Zubie speed field (mph)
+    const heading = car.heading ?? null;
 
     if (vehicle_key && timestamp && lat !== null && lng !== null) {
       try {
@@ -48,7 +49,6 @@ export async function POST(request) {
         console.error('[webhook] Failed to save ping:', err.message);
       }
     } else {
-      // Log the raw payload so we can learn the real field names
       console.log(`[webhook] location_update missing fields — raw:`, JSON.stringify(body).slice(0, 500));
     }
 
