@@ -31,9 +31,10 @@ export async function POST(request) {
         continue;
       }
 
-      // Send polyline to TollGuru — synchronous, no polling needed
-      const tollResult = await submitPolyline(trip.encoded_polyline);
-      const summary = extractTollSummary(tollResult);
+      // Send polyline to TollGuru with departure time for context
+      const departureTime = trip.started_at ? new Date(trip.started_at).toISOString() : null;
+      const tollResult = await submitPolyline(trip.encoded_polyline, '2AxlesAuto', departureTime);
+      const summary = extractTollSummary(tollResult, trip.started_at, trip.ended_at);
 
       await markTripProcessed(trip.trip_key, summary);
       results.push({ trip_key: trip.trip_key, status: 'done', ...summary });

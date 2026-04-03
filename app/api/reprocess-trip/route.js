@@ -40,7 +40,7 @@ export async function GET(request) {
 
   // Call TollGuru with locTimes for per-plaza timestamp interpolation
   const result = await submitPolyline(trip.encoded_polyline, '2AxlesAuto', departureTime, locTimes);
-  const summary = extractTollSummary(result);
+  const summary = extractTollSummary(result, trip.started_at, trip.ended_at);
 
   // Update DB
   await db`
