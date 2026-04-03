@@ -2,8 +2,9 @@
 // Handles: trip_end (save trip), vehicle_location_update (save ping for crossing interpolation)
 // Logs all other event types for diagnostics
 
-import { saveTrip, saveVehiclePing } from '../../../../lib/db.js';
+import { saveTrip, saveVehiclePing, saveTripLocTimes, getPingsForTrip } from '../../../../lib/db.js';
 import { getValidAccessToken } from '../../../../lib/tokens.js';
+import { interpolateLocTimes } from '../../../../lib/interpolate.js';
 
 async function fetchFullTrip(tripKey) {
   try {
@@ -63,18 +64,50 @@ export async function POST(request) {
 
     const fullTrip = await fetchFullTrip(trip.key);
 
+    const savedStartedAt = fullTrip?.start_point?.timestamp || trip.started_at || null;
+    const savedEndedAt = fullTrip?.end_point?.timestamp || trip.ended_at || new Date().toISOString();
+
     await saveTrip({
       trip_key: trip.key,
       vehicle_key: vehicle?.key || fullTrip?.vehicle?.key || null,
       vehicle_nickname: vehicle?.nickname || fullTrip?.vehicle?.nickname || null,
-      started_at: fullTrip?.start_point?.timestamp || trip.started_at || null,
-      ended_at: fullTrip?.end_point?.timestamp || trip.ended_at || new Date().toISOString(),
+      started_at: savedStartedAt,
+      ended_at: savedEndedAt,
       gps_distance: fullTrip?.gps_distance || trip.gps_distance || null,
       encoded_polyline: fullTrip?.encoded_polyline || null,
     });
 
     console.log(`[webhook] trip_end: ${trip.key} | vehicle: ${vehicle?.nickname} | polyline: ${fullTrip?.encoded_polyline ? 'yes' : 'no'}`);
-    return Response.json({ received: true, trip_key: trip.key, has_polyline: !!fullTrip?.encoded_polyline });
+
+    // Interpolate loc_times using real pings collected during the trip
+    let locTimesCount = 0;
+    if (fullTrip?.encoded_polyline && savedStartedAt && savedEndedAt) {
+      try {
+        const pings = await getPingsForTrip(
+          vehicle?.key || fullTrip?.vehicle?.key,
+          savedStartedAt,
+          savedEndedAt
+        );
+        const locTimes = interpolateLocTimes(
+          fullTrip.encoded_polyline,
+          savedStartedAt,
+          savedEndedAt,
+          pings
+        );
+        await saveTripLocTimes(trip.key, locTimes);
+        locTimesCount = locTimes.length;
+        console.log(`[webhook] loc_times computed: ${locTimes.length} points, ${pings.length} pings used`);
+      } catch (err) {
+        console.error(`[webhook] loc_times interpolation failed:`, err.message);
+      }
+    }
+
+    return Response.json({
+      received: true,
+      trip_key: trip.key,
+      has_polyline: !!fullTrip?.encoded_polyline,
+      loc_times_points: locTimesCount,
+    });
   }
 
   // ── everything else ─────────────────────────────────────────────────────────
