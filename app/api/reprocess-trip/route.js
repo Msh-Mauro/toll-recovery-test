@@ -1,9 +1,10 @@
-// Reprocess toll data for a specific trip using the correct departure_time
-// This gives TollGuru accurate context to compute real crossing timestamps
+// Reprocess toll data for a specific trip using locTimes for accurate per-plaza crossing timestamps
+// Decodes the stored polyline, interpolates timestamps by distance, passes to TollGuru
 // GET /api/reprocess-trip?trip_key=<key>
 
 import { neon } from '@neondatabase/serverless';
 import { submitPolyline, extractTollSummary } from '../../../lib/tollguru.js';
+import { decodePolyline, buildLocTimes } from '../../../lib/polyline.js';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -27,11 +28,18 @@ export async function GET(request) {
     return Response.json({ error: 'Trip has no encoded_polyline' }, { status: 422 });
   }
 
-  // Use started_at as departure_time for accurate toll crossing timestamps
-  const departureTime = trip.started_at ? new Date(trip.started_at).toISOString() : null;
+  if (!trip.started_at || !trip.ended_at) {
+    return Response.json({ error: 'Trip missing started_at or ended_at for locTimes' }, { status: 422 });
+  }
 
-  // Call TollGuru with departure_time
-  const result = await submitPolyline(trip.encoded_polyline, '2AxlesAuto', departureTime);
+  // Decode polyline and build per-point timestamps
+  const points = decodePolyline(trip.encoded_polyline);
+  const locTimes = buildLocTimes(points, trip.started_at, trip.ended_at);
+
+  const departureTime = new Date(trip.started_at).toISOString();
+
+  // Call TollGuru with locTimes for per-plaza timestamp interpolation
+  const result = await submitPolyline(trip.encoded_polyline, '2AxlesAuto', departureTime, locTimes);
   const summary = extractTollSummary(result);
 
   // Update DB
@@ -46,9 +54,11 @@ export async function GET(request) {
   return Response.json({
     success: true,
     trip_key,
-    started_at: trip.started_at,
-    departure_time_sent: departureTime,
     vehicle: trip.vehicle_nickname,
+    started_at: trip.started_at,
+    ended_at: trip.ended_at,
+    polyline_points: points.length,
+    loc_times_count: locTimes.length,
     tolls: summary,
   });
 }
