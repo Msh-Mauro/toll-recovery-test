@@ -51,6 +51,8 @@ export async function GET(request) {
     WHERE trip_key = ${trip_key}
   `;
 
+  const debug = searchParams.get('debug') === '1';
+
   return Response.json({
     success: true,
     trip_key,
@@ -60,5 +62,6 @@ export async function GET(request) {
     polyline_points: points.length,
     loc_times_count: locTimes.length,
     tolls: summary,
+    ...(debug && { raw_tollguru: result }),
   });
 }
